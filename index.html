@@ -5,69 +5,90 @@
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TG - @CRICSPORTCENTRAL</title>
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.1.1/shaka-player.ui.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.1.1/controls.min.css" />
   <style>
-    #video {
+    body {
+      background-color: black;
+      color: white;
+      font-family: Arial, sans-serif;
+    }
+
+    video {
       width: 100%;
+      height: auto;
+    }
+
+    select {
+      margin-top: 10px;
+      padding: 5px;
+      font-size: 16px;
     }
   </style>
 </head>
 <body>
+
+  <!-- Video container -->
   <video id="video" controls autoplay></video>
 
+  <!-- Quality selector -->
   <select id="qualitySelect">
     <option value="auto">Auto</option>
   </select>
 
   <script>
-    const masterM3u8Url = "http://46.229.253.219/live/green123/green123/415534.m3u8?token=ShJcU0BbQQNHXAxcVAcCCQgDAVFSBVECBloDAVAGCwMFUwMKV1JRXF0bGBpEF0dcWF1vWQIXXlUAV1cEUUgRR0JVRm1aV0EDRwwNCQFVBxsVEkRZC1BGWwFOQEcMABEIX0VYXh8RBkERXEZWVg9qXVxGWVMDF14PRA4OG0cLXW1VVVlTXVdBA0cIFhQVCkZJGwpeRQpZSENTCxZFBBBWEAteQV5fH0FaCkxaTEUaFwMbZWMSShcBGUUHDEQMC10QCxJZAUYLQRVHUEdnRQZGTUtVUV0DR0ZbE1JAG0cJUkpuU1tcXVYATQxWWksVWRcIGxwSXQlbDRVeED1HDAARCF9FWF5O"; // Replace with your master m3u8 URL
+    const m3u8Url = "http://46.229.253.219/live/green123/green123/415534.m3u8?token=ShJcU0BbQQNHXAxcVAcCCQgDAVFSBVECBloDAVAGCwMFUwMKV1JRXF0bGBpEF0dcWF1vWQIXXlUAV1cEUUgRR0JVRm1aV0EDRwwNCQFVBxsVEkRZC1BGWwFOQEcMABEIX0VYXh8RBkERXEZWVg9qXVxGWVMDF14PRA4OG0cLXW1VVVlTXVdBA0cIFhQVCkZJGwpeRQpZSENTCxZFBBBWEAteQV5fH0FaCkxaTEUaFwMbZWMSShcBGUUHDEQMC10QCxJZAUYLQRVHUEdnRQZGTUtVUV0DR0ZbE1JAG0cJUkpuU1tcXVYATQxWWksVWRcIGxwSXQlbDRVeED1HDAARCF9FWF5O"; // Replace with your m3u8 URL
 
-    const video = document.getElementById('video');
-    const qualitySelect = document.getElementById('qualitySelect');
+    async function initPlayer() {
+      try {
+        const videoElement = document.getElementById('video');
+        const qualitySelect = document.getElementById('qualitySelect');
 
-    if (masterM3u8Url) {
-      if (Hls.isSupported()) {
-        const hls = new Hls();
+        // Initialize Shaka Player
+        const player = new shaka.Player(videoElement);
 
-        hls.loadSource(masterM3u8Url);
-        hls.attachMedia(video);
-
-        // Populate quality options when the manifest is parsed
-        hls.on(Hls.Events.MANIFEST_PARSED, function (_, data) {
-          // Populate the quality selector with available levels
-          data.levels.forEach((level, index) => {
-            const option = document.createElement('option');
-            option.value = index;
-            option.textContent = `${level.height}p (${Math.round(level.bitrate / 1000)} kbps)`;
-            qualitySelect.appendChild(option);
-          });
-
-          // Set to "Auto" (default) quality
-          hls.currentLevel = -1; // -1 means auto quality
+        // Configure player settings for adaptive streaming
+        player.configure({
+          streaming: {
+            bufferingGoal: 30,
+            bufferBehind: 10,
+            retryParameters: {
+              maxAttempts: 5,
+              baseDelay: 1000,
+              backoffFactor: 2,
+            },
+          },
         });
 
-        // Listen for quality selection changes
+        // Load the m3u8 URL into the player
+        await player.load(m3u8Url);
+        console.log("Video loaded successfully!");
+
+        // Fetch and display available quality levels
+        const tracks = player.getVariantTracks();
+        tracks.forEach((track, index) => {
+          const option = document.createElement('option');
+          option.value = index;
+          option.textContent = `${track.height ? track.height + 'p' : 'Auto'} - ${Math.round(track.bitrate / 1000)} kbps`;
+          qualitySelect.appendChild(option);
+        });
+
+        // Add event listener for quality changes
         qualitySelect.addEventListener('change', function () {
-          const selectedQuality = qualitySelect.value;
-
-          if (selectedQuality === "auto") {
-            hls.currentLevel = -1; // Auto quality
-          } else {
-            hls.currentLevel = parseInt(selectedQuality); // Set selected quality
-          }
+          const selectedIndex = qualitySelect.value === 'auto' ? -1 : parseInt(qualitySelect.value);
+          player.selectVariantTrack(tracks[selectedIndex], true);  // Select quality
         });
-      } else {
-        // Fallback for browsers that don't support Hls.js
-        video.src = masterM3u8Url;
-        video.play();
-      }
-    } else {
-      // If no master URL is provided, show an error message
-      document.body.innerHTML = '<p style="color: red; text-align: center;">No master m3u8 URL provided. Update the script with your URL.</p>';
-    }
-  </script>
 
-  <script>
+      } catch (error) {
+        console.error("Error loading video or initializing player:", error);
+        alert("An error occurred while loading the video.");
+      }
+    }
+
+    // Initialize the player when the page is loaded
+    initPlayer();
+
+    // Optional: Telegram link pop-up
     if (confirm("Join Our Telegram Channel @CRICSPORTCENTRAL For More Links")) {
       window.location.href = "https://t.me/CRICSPORTCENTRAL";
     }
@@ -80,5 +101,6 @@
       </button>
     </a>
   </div>
+
 </body>
 </html>
